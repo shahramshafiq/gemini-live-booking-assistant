@@ -1,6 +1,6 @@
 <div align="center">
 
-# Voice Booking Assistant (Gemini Live)
+# Gemini Live Booking Assistant
 
 A voice receptionist that books, looks up, moves and cancels appointments in Google Calendar, built on the Gemini Live API for low latency.
 
@@ -16,7 +16,7 @@ A voice receptionist that books, looks up, moves and cancels appointments in Goo
 
 You open a web page, press Start and talk. The assistant hears you, decides what you need, checks one Google Calendar through a set of tools, offers free times, and only changes the calendar after you say yes to a read-back of the exact details.
 
-This is the Gemini Live version of [voice-booking-assistant](https://github.com/shahramshafiq/voice-booking-assistant). That project chained three streaming services (speech to text, a language model, text to speech). Here one Gemini Live WebSocket hears the audio, decides when you have finished, calls the tools and speaks the answer, so there are no hand-offs between services. The booking rules, the confirmation step and the guardrails stay in the backend code.
+This is the Gemini Live version of [an earlier voice booking assistant](https://github.com/shahramshafiq/twilio-voice-booking-assistant). That project chained three streaming services (speech to text, a language model, text to speech). Here one Gemini Live WebSocket hears the audio, decides when you have finished, calls the tools and speaks the answer, so there are no hand-offs between services. The booking rules, the confirmation step and the guardrails stay in the backend code.
 
 ## How It Works
 
@@ -40,13 +40,13 @@ browser speakers (24 kHz PCM), transcripts, tool list, latency table
 
 Measured against the real Gemini Live API (`gemini-3.8-live`):
 
-1. You stop talking. Gemini waits for 700 ms of silence (`LIVE_SILENCE_DURATION_MS`), then starts a short filler sentence ("Let me check the calendar for you.") and sends the tool call almost at the same time.
+1. You stop talking. Gemini waits for 700 ms of silence (`LIVE_SILENCE_DURATION_MS`), then starts a short filler sentence ("Let me check.") and sends the tool call almost at the same time.
 2. The tool runs while the filler is being heard.
 3. Gemini holds its next sentence until the filler has been heard, then starts it a moment later (0.1 to 0.9 s in our runs), if the tool has answered by then.
 
 Every tool call is a full round trip of Gemini: it stops, waits for the result and then goes on. So the prompt asks for as few tool calls as possible and ONE filler per answer: a move or a cancellation goes straight to `reschedule_booking` or `cancel_booking`, which find and check the booking and the new time themselves, instead of looking the booking up and searching for times first (three round trips and three fillers in a row before this change). The fillers are neutral ("One moment.", "Let me check."): none of them says that a change is being made, because the code may still have to ask the caller to confirm.
 
-A filler should last about as long as its tool plus Gemini's own 0.7 s: a longer one only makes the answer come later, a shorter one leaves a silence. Searches, lookups and the first call of a change read the copy of the calendar kept in memory (well under 0.1 s), so their fillers take about 1 s ("Let me check."). After your yes, the change goes to Google (1.1 to 1.6 s in a live test), so those fillers take about 2 s ("Great, I'm booking that for you now.").
+A filler should last about as long as its tool plus Gemini's own 0.7 s: a longer one only makes the answer come later, a shorter one leaves a silence. Searches, lookups and the first call of a change read the copy of the calendar kept in memory (well under 0.1 s), so their fillers take about 1 s ("Let me check."). After your yes, the change goes to Google (1.1 to 1.6 s in a live test), so those fillers take about 2 s ("Alright, one moment please.").
 
 Every tool result is sent with `scheduling: WHEN_IDLE` and, when it worked, a short "give the caller the answer now" nudge. Without them, `gemini-3.8-live` sometimes held a finished result back until the caller spoke again (once for 13 s in a live test). Gemini does not always say the filler: when it makes a confirmed change without one, the server plays a filler recorded in the same voice (`python -m scripts.make_fillers`), so the line is never silent while the calendar is written.
 
@@ -80,7 +80,7 @@ Every tool result is sent with `scheduling: WHEN_IDLE` and, when it worked, a sh
 ## Project Structure
 
 ```text
-voice-booking-assistant-gemini-live/
+gemini-live-booking-assistant/
   app/
     main.py              FastAPI app, page, health check and the voice WebSocket
     config.py            Reads and validates every setting from .env
@@ -91,6 +91,7 @@ voice-booking-assistant-gemini-live/
     memory.py            Short-term memory for one call
     fillers.py           Loads the recorded filler sentences
     timing.py            Per-answer latency stopwatch
+    logging_setup.py     Log format
     booking/             Scheduling rules and the eight tools
     guardrails/          Input and output guardrails
   data/services.json     The services offered
@@ -113,8 +114,8 @@ voice-booking-assistant-gemini-live/
 ### Installation
 
 ```bash
-git clone https://github.com/shahramshafiq/voice-booking-assistant-gemini-live.git
-cd voice-booking-assistant-gemini-live
+git clone https://github.com/shahramshafiq/gemini-live-booking-assistant.git
+cd gemini-live-booking-assistant
 py -3.14 -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
